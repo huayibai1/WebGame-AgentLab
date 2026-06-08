@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GameVerse AI - 五子棋</title>
+    <style>
+      :root { --paper:#f7f3ea; --porcelain:#fffdfa; --linen:#eee6d8; --ink:#24231f; --graphite:#67645d; --olive:#53624b; --moss:#dce4d2; --clay:#b7815d; }
+      * { box-sizing:border-box; }
+      body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font-family:"Cascadia Mono",Consolas,monospace; }
+      a { color:inherit; text-decoration:none; }
+      .grid-bg,.noise { position:fixed; inset:0; pointer-events:none; }
+      .grid-bg { background-image:linear-gradient(rgb(36 35 31 / 5%) 1px,transparent 1px),linear-gradient(90deg,rgb(36 35 31 / 5%) 1px,transparent 1px); background-size:36px 36px; mask-image:linear-gradient(to bottom,black,transparent 80%); }
+      .noise { background-image:radial-gradient(rgb(36 35 31 / 5%) .75px,transparent .75px); background-size:9px 9px; opacity:.45; }
+      header { position:sticky; top:0; z-index:5; border-bottom:1px solid rgb(36 35 31 / 10%); background:rgb(247 243 234 / 90%); backdrop-filter:blur(18px); }
+      .wrap,.nav { width:min(1180px,calc(100% - 32px)); margin:0 auto; }
+      .nav { height:64px; display:flex; align-items:center; justify-content:space-between; gap:18px; }
+      .brand { display:flex; align-items:center; gap:12px; }
+      .mark { display:grid; width:36px; height:36px; place-items:center; border:1px solid rgb(36 35 31 / 15%); background:var(--porcelain); color:var(--olive); font-weight:900; box-shadow:inset 0 0 0 1px rgb(36 35 31 / 8%); }
+      .brand strong { display:block; font:900 19px Cambria,Georgia,serif; }
+      .brand span,.eyebrow { color:var(--graphite); font-size:10px; text-transform:uppercase; }
+      .nav-cta,.button,.reset { display:inline-flex; border:1px solid rgb(36 35 31 / 15%); background:var(--porcelain); color:var(--olive); padding:10px 12px; font:12px "Cascadia Mono",Consolas,monospace; cursor:pointer; transition:.2s; }
+      .button { border-color:rgb(83 98 75 / 30%); background:var(--moss); }
+      .nav-cta:hover,.button:hover,.reset:hover { border-color:rgb(36 35 31 / 20%); background:var(--porcelain); color:var(--ink); }
+      .hero { position:relative; border-bottom:1px solid rgb(36 35 31 / 10%); }
+      .hero .wrap { position:relative; display:grid; grid-template-columns:1fr 320px; gap:32px; padding:42px 0; align-items:end; }
+      h1 { margin:14px 0 0; font:900 clamp(48px,8vw,86px)/.92 Cambria,Georgia,serif; letter-spacing:0; }
+      .lede { max-width:700px; margin:20px 0 0; color:var(--graphite); font:18px/1.8 system-ui,sans-serif; }
+      .panel,.game-shell { border:1px solid rgb(36 35 31 / 10%); background:var(--porcelain); box-shadow:inset 0 0 0 1px rgb(36 35 31 / 8%); }
+      .panel { padding:18px; }
+      .panel h3,.section-title h2 { margin:8px 0 0; font-family:Cambria,Georgia,serif; }
+      .panel p { color:var(--graphite); line-height:1.7; }
+      .game-shell { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:24px; padding:20px; margin:40px auto; }
+      .section-title { display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:20px; }
+      .section-title h2 { font-size:34px; }
+      .board { display:grid; aspect-ratio:1; width:100%; max-width:620px; margin:0 auto; grid-template-columns:repeat(15,minmax(0,1fr)); border:1px solid rgb(36 35 31 / 20%); background:#d8bc88; padding:8px; box-shadow:0 18px 45px rgb(36 35 31 / 8%); }
+      .cell { position:relative; aspect-ratio:1; border:1px solid rgb(36 35 31 / 20%); background:transparent; cursor:pointer; }
+      .cell:disabled { cursor:default; }
+      .stone { position:absolute; inset:18%; border-radius:999px; }
+      .black { background:var(--ink); box-shadow:inset 0 2px 6px rgb(255 255 255 / 18%); }
+      .white { border:1px solid rgb(36 35 31 / 15%); background:var(--porcelain); box-shadow:inset 0 -2px 5px rgb(36 35 31 / 12%); }
+      .last-dot { position:absolute; left:50%; top:50%; width:6px; height:6px; transform:translate(-50%,-50%); border-radius:999px; background:var(--clay); }
+      .status { border:1px solid rgb(36 35 31 / 10%); background:var(--paper); padding:16px; }
+      .status h3 { margin:12px 0 0; font:900 25px/1.15 Cambria,Georgia,serif; }
+      .match-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:22px; }
+      .match-grid div { border:1px solid rgb(36 35 31 / 10%); background:var(--porcelain); padding:12px; }
+      .match-grid small { display:block; color:var(--graphite); text-transform:uppercase; }
+      .match-grid b { display:block; margin-top:5px; color:var(--olive); font:900 20px Cambria,Georgia,serif; }
+      @media (max-width:860px) { .hero .wrap,.game-shell { grid-template-columns:1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="grid-bg"></div>
+    <div class="noise"></div>
+    <header>
+      <div class="nav">
+        <a class="brand" href="/"><div class="mark">GV</div><div><strong>GameVerse AI</strong><span>agent game studio</span></div></a>
+        <a class="nav-cta" href="/games">返回游戏入口</a>
+      </div>
+    </header>
+    <main>
+      <section class="hero">
+        <div class="wrap">
+          <div>
+            <a class="eyebrow" href="/games">返回游戏入口</a>
+            <h1>五子棋</h1>
+            <p class="lede">当前首个可玩小游戏。玩家执黑先手，小宇执白，用本地启发式算法完成攻防。</p>
+          </div>
+          <aside class="panel"><div class="eyebrow">prototype status</div><h3>本地 AI / 15 x 15</h3><p>当前没有接入远程 API，AI 对手完全在浏览器本地计算。</p></aside>
+        </div>
+      </section>
+      <section class="wrap game-shell">
+        <div>
+          <div class="section-title"><div><div class="eyebrow">playable prototype</div><h2>五子棋原型</h2></div><button id="reset" class="reset" type="button">重新开始</button></div>
+          <div id="board" class="board" aria-label="五子棋棋盘"></div>
+        </div>
+        <aside class="status">
+          <div class="eyebrow">match status</div>
+          <h3 id="status">轮到你。黑子先行，连成五子获胜。</h3>
+          <div class="match-grid">
+            <div><small>black</small><b>玩家</b></div>
+            <div><small>white</small><b>小宇</b></div>
+            <div><small>moves</small><b id="moves">0</b></div>
+            <div><small>mode</small><b>local</b></div>
+          </div>
+          <p>当前 AI 是本地启发式算法：优先取胜，其次堵住玩家成五，再选择连线评分最高的位置。</p>
+        </aside>
+      </section>
+    </main>
+    <script>
+      const boardSize = 15;
+      const directions = [[1,0],[0,1],[1,1],[1,-1]];
+      const boardElement = document.querySelector('#board');
+      const statusElement = document.querySelector('#status');
+      const movesElement = document.querySelector('#moves');
+      const resetElement = document.querySelector('#reset');
+      let board = Array(boardSize * boardSize).fill(0);
+      let winner = 0;
+      let lastMove = null;
+      let aiThinking = false;
+
+      function indexOf(row, col) { return row * boardSize + col; }
+      function inBounds(row, col) { return row >= 0 && row < boardSize && col >= 0 && col < boardSize; }
+      function countLine(testBoard, row, col, player, dx, dy) {
+        let count = 1;
+        [-1, 1].forEach((sign) => {
+          let nextRow = row + dy * sign;
+          let nextCol = col + dx * sign;
+          while (inBounds(nextRow, nextCol) && testBoard[indexOf(nextRow, nextCol)] === player) {
+            count += 1; nextRow += dy * sign; nextCol += dx * sign;
+          }
+        });
+        return count;
+      }
+      function getWinner(testBoard, moveIndex) {
+        const player = testBoard[moveIndex];
+        if (!player) return 0;
+        const row = Math.floor(moveIndex / boardSize);
+        const col = moveIndex % boardSize;
+        if (directions.some(([dx, dy]) => countLine(testBoard, row, col, player, dx, dy) >= 5)) return player;
+        return testBoard.every(Boolean) ? 3 : 0;
+      }
+      function scoreMove(testBoard, moveIndex, player) {
+        const row = Math.floor(moveIndex / boardSize);
+        const col = moveIndex % boardSize;
+        return directions.reduce((score, [dx, dy]) => score + countLine(testBoard, row, col, player, dx, dy) ** 2, 0);
+      }
+      function chooseAiMove(testBoard) {
+        const emptyIndexes = testBoard.map((cell, index) => cell === 0 ? index : -1).filter((index) => index >= 0);
+        if (!testBoard.some(Boolean)) return indexOf(7, 7);
+        for (const index of emptyIndexes) { const clone = [...testBoard]; clone[index] = 2; if (getWinner(clone, index) === 2) return index; }
+        for (const index of emptyIndexes) { const clone = [...testBoard]; clone[index] = 1; if (getWinner(clone, index) === 1) return index; }
+        return emptyIndexes.map((index) => {
+          const clone = [...testBoard]; clone[index] = 2;
+          return { index, score: scoreMove(clone, index, 2) + scoreMove(clone, index, 1) * .8 };
+        }).sort((a, b) => b.score - a.score)[0]?.index;
+      }
+      function statusText() {
+        if (winner === 1) return '你赢了。小宇需要重新校准棋感。';
+        if (winner === 2) return '小宇赢了。它现在有点得意。';
+        if (winner === 3) return '平局。棋盘已经填满。';
+        if (aiThinking) return '小宇正在落子...';
+        return '轮到你。黑子先行，连成五子获胜。';
+      }
+      function render() {
+        boardElement.innerHTML = '';
+        board.forEach((cell, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'cell';
+          button.disabled = Boolean(cell || winner || aiThinking);
+          button.setAttribute('aria-label', `row ${Math.floor(index / boardSize) + 1}, column ${(index % boardSize) + 1}`);
+          button.addEventListener('click', () => play(index));
+          if (cell) {
+            const stone = document.createElement('span');
+            stone.className = cell === 1 ? 'stone black' : 'stone white';
+            button.appendChild(stone);
+          }
+          if (lastMove === index) {
+            const dot = document.createElement('span');
+            dot.className = 'last-dot';
+            button.appendChild(dot);
+          }
+          boardElement.appendChild(button);
+        });
+        statusElement.textContent = statusText();
+        movesElement.textContent = String(board.filter(Boolean).length);
+      }
+      function play(index) {
+        if (board[index] || winner || aiThinking) return;
+        board[index] = 1;
+        lastMove = index;
+        winner = getWinner(board, index);
+        render();
+        if (winner) return;
+        aiThinking = true;
+        render();
+        window.setTimeout(() => {
+          const aiIndex = chooseAiMove(board);
+          if (aiIndex === undefined) { winner = 3; aiThinking = false; render(); return; }
+          board[aiIndex] = 2;
+          lastMove = aiIndex;
+          winner = getWinner(board, aiIndex);
+          aiThinking = false;
+          render();
+        }, 280);
+      }
+      function reset() { board = Array(boardSize * boardSize).fill(0); winner = 0; lastMove = null; aiThinking = false; render(); }
+      resetElement.addEventListener('click', reset);
+      render();
+    </script>
+  </body>
+</html>
+
